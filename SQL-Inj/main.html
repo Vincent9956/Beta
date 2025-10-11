@@ -1,5 +1,50 @@
-<<html>
-  <body>
-    test
-  </body>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Login demo (local)</title>
+</head>
+<body>
+  <h1>Login demo (local)</h1>
+
+  <form id="loginForm">
+    <label>
+      Username:
+      <input name="username" required />
+    </label>
+    <br/>
+    <label>
+      Password:
+      <input name="password" type="password" required />
+    </label>
+    <br/>
+    <button type="submit">Login</button>
+  </form>
+
+  <pre id="output"></pre>
+
+  <script>
+    const form = document.getElementById('loginForm');
+    const out = document.getElementById('output');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(form);
+      const payload = {
+        username: fd.get('username'),
+        password: fd.get('password')
+      };
+
+      const res = await fetch('/login', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+      });
+
+      const json = await res.json();
+      out.textContent = JSON.stringify(json, null, 2);
+    });
+  </script>
+</body>
 </html>
+
