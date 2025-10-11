@@ -35,7 +35,7 @@ jobs:
           python-version: '3.x'
 
       - name: run 
-        run: cd /Python && python api.py
+        run: cd Python && python api.py
 
   
   dependency-check:
