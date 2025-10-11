@@ -1,408 +1,162 @@
 name: DevSecOps Security Pipeline
 
 on:
-  push:
-    branches: [ main, develop ]
-  pull_request:
-    branches: [ main, develop ]
-  workflow_dispatch:
+push:
+branches: [ main, develop ]
+pull_request:
+branches: [ main, develop ]
+workflow_dispatch:
 
 permissions:
-  contents: read
-  security-events: write
-  issues: write
+contents: read
+security-events: write
+issues: write
 
 jobs:
-  # Job 1: SAST - Static Application Security Testing
-  sast-analysis:
-    name: SAST Security Scan
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
-      
-      # Bandit für Python Code
-      - name: Install Bandit
-        run: pip install bandit[toml]
-      
-      - name: Run Bandit SAST Scan
-        run: |
-          bandit -r . -f json -o bandit-report.json || true
-          bandit -r . -f txt -o bandit-report.txt || true
-      
-      # Semgrep für Multi-Language Support
-      - name: Run Semgrep SAST Scan
-        uses: returntocorp/semgrep-action@v1
-        with:
-          config: >-
-            p/security-audit
-            p/owasp-top-ten
-            p/cwe-top-25
-          generateSarif: true
-      
-      - name: Upload SAST Results
-        uses: a@v4
-        if: always()
-        with:
-          name: sast-reports
-          path: |
-            bandit-report.*
-            semgrep.sarif
+# Job 1: SAST - Static Application Security Testing
+sast-analysis:
+name: SAST Security Scan
+runs-on: ubuntu-latest
 
-  # Job 2: SCA - Software Composition Analysis
-  sca-analysis:
-    name: SCA Dependency Check
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-      
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
-      
-      # OWASP Dependency Check
-      - name: Run OWASP Dependency-Check
-        uses: dependency-check/Dependency-Check_Action@main
-        with:
-          project: 'devsecops-project'
-          path: '.'
-          format: 'ALL'
-          args: >
-            --enableRetired
-            --enableExperimental
-      
-      - name: Upload Dependency-Check Results
-        uses: a@v4
-        if: always()
-        with:
-          name: dependency-check-report
-          path: reports/
-      
-      # Safety für Python Dependencies
-      - name: Install Safety
-        run: pip install safety
-      
-      - name: Run Safety Check
-        run: |
-          pip freeze > requirements-current.txt
-          safety check --json --output safety-report.json || true
-          safety check --output safety-report.txt || true
-        continue-on-error: true
-      
-      - name: Upload Safety Results
-        uses: a@v4
-        if: always()
-        with:
-          name: safety-reports
-          path: |
-            safety-report.*
-            requirements-current.txt
+steps:
+- name: Checkout Code
+uses: actions/checkout@v4
+with:
+fetch-depth: 0
 
-  # Job 3: Secret Scanning
-  secret-scan:
-    name: Secret Detection
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      
-      - name: Gitleaks Secret Scan
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
-      
-      - name: TruffleHog Secret Scan
-        uses: trufflesecurity/trufflehog@main
-        with:
-          path: ./
-          base: ${{ github.event.repository.default_branch }}
-          head: HEAD
-          extra_args: --json --output trufflehog-report.json
-        continue-on-error: true
-      
-      - name: Upload Secret Scan Results
-        uses: a@v4
-        if: always()
-        with:
-          name: secret-scan-reports
-          path: |
-            trufflehog-report.json
+- name: Set up Python
+uses: actions/setup-python@v4
+with:
+python-version: '3.11'
 
-  # Job 4: Container Security Scan
-  container-security:
-    name: Container Image Scan
-    runs-on: ubuntu-latest
-    needs: [sast-analysis, sca-analysis]
-    
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-      
-      - name: Build Docker Image
-        run: |
-          if [ -f Dockerfile ]; then
-            docker build -t test-app:${{ github.sha }} .
-          else
-            echo "FROM python:3.11-slim" > Dockerfile
-            echo "WORKDIR /app" >> Dockerfile
-            echo "COPY . /app" >> Dockerfile
-            docker build -t test-app:${{ github.sha }} .
-          fi
-      
-      # Trivy Container Scan
-      - name: Run Trivy Vulnerability Scanner
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: test-app:${{ github.sha }}
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-          severity: 'CRITICAL,HIGH,MEDIUM'
-      
-      - name: Run Trivy JSON Report
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: test-app:${{ github.sha }}
-          format: 'json'
-          output: 'trivy-results.json'
-        continue-on-error: true
-      
-      - name: Upload Trivy Results
-        uses: a@v4
-        if: always()
-        with:
-          name: trivy-reports
-          path: |
-            trivy-results.*
-      
-      # Anchore/Grype Container Scan
-      - name: Run Grype Scan
-        uses: anchore/scan-action@v3
-        with:
-          image: test-app:${{ github.sha }}
-          fail-build: false
-          severity-cutoff: high
-          output-format: json
-      
-      - name: Upload Grype Results
-        uses: a@v4
-        if: always()
-        with:
-          name: grype-reports
-          path: |
-            ${{ steps.scan.outputs.json }}
+# Bandit für Python Code
+- name: Install Bandit
+run: pip install bandit[toml]
 
-  # Job 5: DAST - Dynamic Application Security Testing
-  dast-scan:
-    name: DAST Security Testing
-    runs-on: ubuntu-latest
-    needs: [container-security]
-    if: github.event_name == 'push'
-    
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-      
-      - name: Setup Test Application
-        run: |
-          if [ -f docker-compose.yml ]; then
-            docker-compose up -d
-            sleep 30
-          else
-            echo "Skipping DAST - no docker-compose.yml found"
-          fi
-      
-      - name: OWASP ZAP Baseline Scan
-        uses: zaproxy/action-baseline@v0.10.0
-        with:
-          target: 'http://localhost:8080'
-          rules_file_name: '.zap/rules.tsv'
-          cmd_options: '-a -j'
-          fail_action: false
-        continue-on-error: true
-      
-      - name: Upload ZAP Results
-        uses: a@v4
-        if: always()
-        with:
-          name: zap-reports
-          path: |
-            report_html.html
-            report_json.json
-            report_md.md
+- name: Run Bandit SAST Scan
+run: |
+         bandit -r . -f json -o bandit-report.json || true
+         bandit -r . -f txt -o bandit-report.txt || true
+     
+# Semgrep für Multi-Language Support
+- name: Run Semgrep SAST Scan
+uses: returntocorp/semgrep-action@v1
+with:
+config: >-
+           p/security-audit
+           p/owasp-top-ten
+           p/cwe-top-25
+         generateSarif: true
 
-  # Job 6: IaC Security Scanning
-  iac-security:
-    name: Infrastructure as Code Security
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-      
-      # Checkov für IaC Scanning
-      - name: Run Checkov IaC Scanner
-        uses: bridgecrewio/checkov-action@master
-        with:
-          directory: .
-          framework: all
-          output_format: json
-          output_file_path: checkov-report.json
-          soft_fail: true
-      
-      - name: Upload Checkov Results
-        uses: a@v4
-        if: always()
-        with:
-          name: checkov-reports
-          path: |
-            checkov-report.json
-      
-      # KICS für IaC Scanning
-      - name: Run KICS Scan
-        uses: checkmarx/kics-github-action@v1.7.0
-        with:
-          path: '.'
-          output_path: kics-results/
-          platform_type: terraform,kubernetes,dockerfile
-          output_formats: 'json,sarif'
-          fail_on: high
-          enable_comments: true
-        continue-on-error: true
-      
-      - name: Upload KICS Results
-        uses: a@v4
-        if: always()
-        with:
-          name: kics-reports
-          path: kics-results/
+- name: Upload SAST Results
+uses: actions/upload-artifact@v4
+if: always()
+with:
+name: sast-reports
+path: |
+           bandit-report.*
+           semgrep.sarif
 
-  # Job 7: Security Summary Report
-  security-report:
-    name: Generate Security Summary
-    runs-on: ubuntu-latest
-    needs: [sast-analysis, sca-analysis, secret-scan, container-security, iac-security]
-    if: always()
-    
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-      
-      - name: Download All Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: security-reports/
-      
-      - name: Generate Security Summary
-        run: |
-          cat << 'EOF' > security-summary.md
-          # 🔒 DevSecOps Security Pipeline Summary
-          
-          **Pipeline Run:** ${{ github.run_number }}  
-          **Commit:** ${{ github.sha }}  
-          **Branch:** ${{ github.ref_name }}  
-          **Date:** $(date)
-          
-          ## 📊 Security Scan Results
-          
-          ### SAST (Static Application Security Testing)
-          - ✅ Bandit Python Security Scan
-          - ✅ Semgrep Multi-Language Scan
-          
-          ### SCA (Software Composition Analysis)
-          - ✅ OWASP Dependency-Check
-          - ✅ Safety Python Dependencies Check
-          
-          ### Secret Detection
-          - ✅ Gitleaks Secret Scan
-          - ✅ TruffleHog Secret Scan
-          
-          ### Container Security
-          - ✅ Trivy Container Vulnerability Scan
-          - ✅ Grype Container Analysis
-          
-          ### IaC Security
-          -  Checkov Infrastructure Scan
-          - KICS Security Analysis
-          
-          ### DAST (Dynamic Application Security Testing)
-          - OWASP ZAP Baseline Scan
-          
-          ## Artifacts
-          
-          All detailed reports are available in the workflow artifacts.
-          
-          ## 🔧 Next Steps
-          
-          1. Review all HIGH and CRITICAL findings
-          2. Create tickets for vulnerability remediation
-          3. Update dependencies with known vulnerabilities
-          4. Fix identified code security issues
-          5. Re-run pipeline after fixes
-          
-          ---
-          *Generated by DevSecOps Pipeline*
-          EOF
-          
-          cat security-summary.md
-      
-      - name: Upload Security Summary
-        uses: a@v4
-        with:
-          name: security-summary
-          path: |
-            security-summary.md
-            security-reports/
-      
-      - name: Comment PR with Results
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const summary = fs.readFileSync('security-summary.md', 'utf8');
-            
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: summary
-            });
+ # Job 2: SCA - Software Composition Analysis
+sca-analysis:
+name: SCA Dependency Check
+runs-on: ubuntu-latest
 
-  # Job 8: Quality Gate
-  quality-gate:
-    name: Security Quality Gate
-    runs-on: ubuntu-latest
-    needs: [sast-analysis, sca-analysis, secret-scan, container-security, iac-security]
-    if: always()
-    
-    steps:
-      - name: Check Security Scan Results
-        run: |
-          echo "🔍 Evaluating Security Quality Gate..."
-          echo "✅ SAST: ${{ needs.sast-analysis.result }}"
-          echo "✅ SCA: ${{ needs.sca-analysis.result }}"
-          echo "✅ Secrets: ${{ needs.secret-scan.result }}"
-          echo "✅ Container: ${{ needs.container-security.result }}"
-          echo "✅ IaC: ${{ needs.iac-security.result }}"
-          
-          if [ "${{ needs.secret-scan.result }}" == "failure" ]; then
-            echo "❌ CRITICAL: Secrets detected! Pipeline failed."
-            exit 1
-          fi
-          
-          echo "✅ Quality Gate Passed - No critical security issues found"
+steps:
+- name: Checkout Code
+uses: actions/checkout@v4
+
+- name: Set up Python
+uses: actions/setup-python@v4
+with:
+python-version: '3.11'
+
+# OWASP Dependency Check
+- name: Run OWASP Dependency-Check
+uses: dependency-check/Dependency-Check_Action@main
+with:
+project: 'devsecops-project'
+path: '.'
+format: 'ALL'
+args: >
+           --enableRetired
+           --enableExperimental
+     
+- name: Upload Dependency-Check Results
+        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
+if: always()
+with:
+name: dependency-check-report
+@@ -101,7 +101,7 @@
+       continue-on-error: true
+
+- name: Upload Safety Results
+        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
+if: always()
+with:
+name: safety-reports
+@@ -136,7 +136,7 @@
+continue-on-error: true
+
+- name: Upload Secret Scan Results
+        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
+if: always()
+with:
+name: secret-scan-reports
+@@ -182,7 +182,7 @@
+continue-on-error: true
+
+- name: Upload Trivy Results
+        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
+if: always()
+with:
+name: trivy-reports
+@@ -199,7 +199,7 @@
+output-format: json
+
+- name: Upload Grype Results
+        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
+if: always()
+with:
+name: grype-reports
+@@ -236,7 +236,7 @@
+continue-on-error: true
+
+- name: Upload ZAP Results
+        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
+if: always()
+with:
+name: zap-reports
+@@ -265,7 +265,7 @@
+soft_fail: true
+
+- name: Upload Checkov Results
+        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
+if: always()
+with:
+name: checkov-reports
+@@ -285,7 +285,7 @@
+continue-on-error: true
+
+- name: Upload KICS Results
+        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
+if: always()
+with:
+name: kics-reports
+@@ -361,7 +361,7 @@
+         cat security-summary.md
+     
+- name: Upload Security Summary
+        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
+with:
+name: security-summary
+path: |
