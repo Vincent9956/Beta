@@ -336,13 +336,13 @@ jobs:
           - ✅ Grype Container Analysis
           
           ### IaC Security
-          - ✅ Checkov Infrastructure Scan
-          - ✅ KICS Security Analysis
+          -  Checkov Infrastructure Scan
+          - KICS Security Analysis
           
           ### DAST (Dynamic Application Security Testing)
-          - ✅ OWASP ZAP Baseline Scan
+          - OWASP ZAP Baseline Scan
           
-          ## 📁 Artifacts
+          ## Artifacts
           
           All detailed reports are available in the workflow artifacts.
           
