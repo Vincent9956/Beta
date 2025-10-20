@@ -147,7 +147,7 @@ jobs:
   container-security:
     name: Container Image Scan
     runs-on: ubuntu-latest
-    needs: [sast-analysis, sca-analysis]
+    # needs: [sast-analysis, sca-analysis]
     
     steps:
       - name: Checkout Code
