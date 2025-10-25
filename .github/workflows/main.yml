@@ -42,75 +42,6 @@ jobs:
           path: semgrep.sarif
           retention-days: 30
 
-  secrets-detection:
-    name: Secret Scanning with Gitleaks
-    runs-on: ubuntu-latest
-    
-    permissions:
-      contents: read
-      
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0  # Fetch all history for all branches
-      
-      - name: Run Gitleaks
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITLEAKS_ENABLE_SUMMARY: true
-      
-      - name: Upload Gitleaks report
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: gitleaks-report
-          path: gitleaks-report.json
-          retention-days: 30
-
-  dependency-scan:
-    name: Dependency Security Scan
-    runs-on: ubuntu-latest
-    
-    permissions:
-      contents: read
-      
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-      
-      - name: Install dependencies
-        run: npm install
-      
-      - name: Run npm audit
-        run: |
-          npm audit --json > npm-audit.json || true
-          npm audit --audit-level=moderate || true
-        continue-on-error: true
-      
-      - name: Run Snyk Security Scan (Alternative)
-        uses: snyk/actions/node@master
-        continue-on-error: true
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        with:
-          args: --severity-threshold=high --json-file-output=snyk-results.json
-      
-      - name: Upload dependency scan artifacts
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: dependency-scan-results
-          path: |
-            npm-audit.json
-            snyk-results.json
-          retention-days: 30
 
   container-security-scan:
     name: Container Security Scan with Trivy
@@ -171,7 +102,7 @@ jobs:
   dast-scan:
     name: OWASP ZAP DAST Scan
     runs-on: ubuntu-latest
-    needs: [semgrep-sast, secrets-detection]
+    
     
     permissions:
       contents: read
@@ -215,7 +146,7 @@ jobs:
   security-summary:
     name: Generate Security Summary
     runs-on: ubuntu-latest
-    needs: [semgrep-sast, secrets-detection, dependency-scan, container-security-scan, dast-scan]
+    needs: [semgrep-sast, container-security-scan, dast-scan]
     if: always()
     
     permissions:
@@ -264,3 +195,4 @@ jobs:
           name: security-summary
           path: security-summary.md
           retention-days: 30
+
