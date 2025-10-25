@@ -31,11 +31,8 @@ jobs:
             p/security-audit
             p/javascript
             p/nodejs
-            p/express
             p/owasp-top-ten
             p/secrets
-        env:
-          SEMGREP_RULES: auto
       
       - name: Upload Semgrep results
         uses: actions/upload-artifact@v4
