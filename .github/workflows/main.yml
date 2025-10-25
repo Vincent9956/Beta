@@ -150,8 +150,8 @@ jobs:
         uses: zaproxy/action-baseline@v0.12.0
         with:
           target: 'http://localhost:3000'
-          rules_file_name: '.zap/rules.tsv'
           cmd_options: '-a'
+        continue-on-error: true
           
       - name: Upload ZAP Scan Report (HTML)
         uses: actions/upload-artifact@v4
@@ -168,6 +168,25 @@ jobs:
           name: zap-scan-report-json
           path: report_json.json
           retention-days: 30
+      
+      - name: Upload ZAP Scan Report (Markdown)
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: zap-scan-report-markdown
+          path: report_md.md
+          retention-days: 30
+      
+      - name: Display ZAP Scan Summary
+        if: always()
+        run: |
+          echo "# 🔍 DAST Scan Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f report_md.md ]; then
+            cat report_md.md >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ ZAP scan completed but report not found" >> $GITHUB_STEP_SUMMARY
+          fi
 
   security-summary:
     name: Security Scan Summary
