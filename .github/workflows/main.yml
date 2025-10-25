@@ -51,7 +51,6 @@ jobs:
           name: zap-scan-report-html
           path: report_html.html
           retention-days: 30
-          if-no-files-found: warn
       
       - name: Upload SARIF results to GitHub
         uses: github/codeql-action/upload-sarif@v3
