@@ -29,13 +29,10 @@ jobs:
           node-version: '20'
       
       - name: Install dependencies
-        run: |
-          cd sample-app
-          npm install
+        run: npm install
       
       - name: Start application
         run: |
-          cd sample-app
           node server.js &
           sleep 5
           curl http://localhost:3000 || exit 1
