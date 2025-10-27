@@ -98,7 +98,35 @@ jobs:
               echo "::warning::Found $CRITICAL_COUNT critical/high vulnerabilities in container image"
             fi
           fi
-
+  
+  dependency-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      
+      - name: Install dependencies
+        run: npm install
+      
+      - name: Run OWASP Dependency-Check (Action)
+        uses: dependency-check/Dependency-Check_Action@main
+        with:
+          project: 'unsicheres-projekt-mit-bekannt'
+          format: 'ALL'
+          outputDirectory: 'reports'
+      
+      # NEU: Reports hochladen
+      - name: Upload Dependency-Check Reports
+        uses: actions/upload-artifact@v4
+        if: always()  # Auch bei Fehlern hochladen
+        with:
+          name: dependency-check-reports
+          path: reports/
+          retention-days: 30  # Optional: wie lange aufbewahren
   dast-scan:
     name: OWASP ZAP DAST Scan
     runs-on: ubuntu-latest
@@ -195,4 +223,5 @@ jobs:
           name: security-summary
           path: security-summary.md
           retention-days: 30
+
 
